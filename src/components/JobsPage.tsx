@@ -12,6 +12,8 @@ import { Search, MapPin, Clock, Building, FileText } from "lucide-react";
 import { UserProfile } from "@/pages/Index";
 import { supabase } from "@/integrations/supabase/client";
 import CVUpload from "./CVUpload";
+import { API_BASE_URL } from "../config";
+import VideoDialog from "./PaymentDialog"
 
 interface Job {
   id: string;
@@ -43,20 +45,65 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const locations = ["all", "Addis Ababa", "Jimma", "Bahir Dar", "Hawassa", "Dire Dawa", "Mekelle"];
+  const [courseId, setCourseId] = useState("");
+  const [courseInfo, setCourseInfo] = useState<{ title: string } | null>(null);
+  const [courseError, setCourseError] = useState<string | null>(null);
 
+  const locations = ["all", "addis ababa", "jimma", "bahir dar", "hawassa", "dire dawa", "mekelle"];
+
+  const handleCourseIdChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const value = e.target.value;
+    setCourseId(value);
+    setCourseInfo(null);
+    setCourseError(null);
+
+    if (!value.trim()) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/courses/${value}/`);
+      if (!res.ok) throw new Error("Course not found");
+
+      const data = await res.json();
+      setCourseInfo({ title: data.title });
+    } catch (err) {
+      setCourseError("No course found with this ID");
+    }
+  };
+
+  // const fetchJobs = async () => {
+  //   try {
+  //     const { data, error } = await supabase
+  //       .from('jobs')
+  //       .select('*')
+  //       .eq('is_active', true)
+  //       .order('created_at', { ascending: false });
+
+  //     if (error) throw error;
+  //     setJobs(data || []);
+  //   } catch (error) {
+  //     console.error('Error fetching jobs:', error);
+  //     toast({
+  //       title: "Error loading jobs",
+  //       description: "Could not load job listings. Please try again.",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
   const fetchJobs = async () => {
     try {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+      const response = await fetch(`${API_BASE_URL}/jobs/`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch jobs");
+      }
 
-      if (error) throw error;
-      setJobs(data || []);
+      const data = await response.json();
+      const activeJobs = data.filter((job: any) => job.is_active); // filter only active jobs
+
+      setJobs(activeJobs || []);
+      console.log("JOBS ARE SET");
     } catch (error) {
-      console.error('Error fetching jobs:', error);
+      console.log("Below is Error from fetching jobs:");
+      console.error("Error fetching jobs:", error);
       toast({
         title: "Error loading jobs",
         description: "Could not load job listings. Please try again.",
@@ -64,6 +111,7 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
       });
     }
   };
+
 
   const fetchApplications = async () => {
     try {
@@ -103,43 +151,95 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
     return matchesSearch && matchesLocation;
   });
 
-  const handlePostJob = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
+  // const handlePostJob = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   const formData = new FormData(e.target as HTMLFormElement);
     
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .insert({
-          title: formData.get('job-title') as string,
-          company_name: formData.get('company') as string,
-          location: formData.get('location') as string,
-          job_type: formData.get('job-type') as string,
-          salary_range: formData.get('salary') as string,
-          description: formData.get('description') as string,
-          requirements: formData.get('requirements') as string,
-          posted_by: user.id,
-        });
+  //   try {
+  //     const { error } = await supabase
+  //       .from('jobs')
+  //       .insert({
+  //         title: formData.get('job-title') as string,
+  //         company_name: formData.get('company') as string,
+  //         location: formData.get('location') as string,
+  //         job_type: formData.get('job-type') as string,
+  //         salary_range: formData.get('salary') as string,
+  //         description: formData.get('description') as string,
+  //         requirements: formData.get('requirements') as string,
+  //       });
 
-      if (error) throw error;
+  //     if (error) throw error;
 
-      toast({
-        title: "Job posted successfully",
-        description: "Your job posting is now live and visible to job seekers.",
-      });
+  //     toast({
+  //       title: "Job posted successfully",
+  //       description: "Your job posting is now live and visible to job seekers.",
+  //     });
       
-      setIsPostJobOpen(false);
-      fetchJobs(); // Refresh the jobs list
-      (e.target as HTMLFormElement).reset();
-    } catch (error) {
-      console.error('Error posting job:', error);
-      toast({
-        title: "Error posting job",
-        description: "Could not post the job. Please try again.",
-        variant: "destructive",
-      });
-    }
+  //     setIsPostJobOpen(false);
+  //     fetchJobs(); // Refresh the jobs list
+  //     (e.target as HTMLFormElement).reset();
+  //   } catch (error) {
+  //     console.error('Error posting job:', error);
+  //     toast({
+  //       title: "Error posting job",
+  //       description: "Could not post the job. Please try again.",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
+
+  const handlePostJob = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const form = e.target as HTMLFormElement;
+  const formData = new FormData(form);
+
+  const payload = {
+    title: formData.get("job-title"),
+    company_name: formData.get("company"),
+    location: formData.get("location"),
+    job_type: formData.get("job-type"),
+    salary_range: formData.get("salary"),
+    description: formData.get("description"),
+    requirements: formData.get("requirements"),
+    course: formData.get("course-id"),  // Include the validated courseId if present
   };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/jobs/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Include authorization if required:
+        // Authorization: `Bearer ${your_token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to post job");
+    }
+
+    toast({
+      title: "Job posted successfully",
+      description: "Your job posting is now live and visible to job seekers.",
+    });
+
+    setIsPostJobOpen(false);
+    fetchJobs(); // Refresh the jobs list
+    form.reset();
+    setCourseId("");
+    setCourseInfo(null);
+    setCourseError(null);
+  } catch (error) {
+    console.error("Error posting job:", error);
+    toast({
+      title: "Error posting job",
+      description: "Could not post the job. Please try again.",
+      variant: "destructive",
+    });
+  }
+};
+
 
   const handleApplyJob = async (jobId: string) => {
     // Check if user has a CV
@@ -440,6 +540,23 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="course-id">Course ID (linked to this job)</Label>
+                  <Input
+                    name="course-id"
+                    value={courseId}
+                    onChange={handleCourseIdChange}
+                    placeholder="Enter course ID"
+                    className={courseError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    required
+                  />
+                  {courseInfo && (
+                    <p className="text-green-600 text-sm">✓ {courseInfo.title}</p>
+                  )}
+                  {courseError && (
+                    <p className="text-red-500 text-sm">{courseError}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="requirements">Requirements</Label>
                   <Textarea
                     name="requirements"
@@ -468,58 +585,139 @@ interface JobCardProps {
 }
 
 const JobCard = ({ job, onApply, hasApplied, userHasCV }: JobCardProps) => {
+  const [coursejob, setCourseJob] = useState<Course | null>(null);
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/courses/${job.course}/`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch course");
+        }
+        const data = await response.json();
+        setCourseJob(data);
+      } catch (error) {
+        console.error("Error fetching course:", error);
+        toast({
+          title: "Error loading course",
+          description: "Could not load course for this job.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    if (job.course) {
+      fetchCourse();
+    }
+  }, [job.course]);
+
   return (
     <Card className="card-hover">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="space-y-2">
-            <CardTitle className="text-xl">{job.title}</CardTitle>
-            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-              <div className="flex items-center space-x-1">
-                <Building className="h-4 w-4" />
-                <span>{job.company_name || 'Company not specified'}</span>
-              </div>
-              {job.location && (
-                <div className="flex items-center space-x-1">
-                  <MapPin className="h-4 w-4" />
-                  <span>{job.location}</span>
-                </div>
-              )}
-              {job.job_type && (
-                <div className="flex items-center space-x-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{job.job_type}</span>
-                </div>
-              )}
+  <CardHeader>
+    <div className="flex justify-between items-start">
+      <div className="space-y-2">
+        <CardTitle className="text-xl">{job.title}</CardTitle>
+        <div className="flex items-center flex-wrap gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <Building className="h-4 w-4" />
+            <span>{job.company_name || 'Company not specified'}</span>
+          </div>
+          {job.location && (
+            <div className="flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              <span>{job.location}</span>
             </div>
-          </div>
+          )}
+          {job.job_type && (
+            <div className="flex items-center gap-1">
+              <Clock className="h-4 w-4" />
+              <span>{job.job_type}</span>
+            </div>
+          )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <CardDescription className="line-clamp-3">{job.description}</CardDescription>
-        
-        {job.requirements && (
-          <div className="space-y-2">
-            <h4 className="font-semibold text-sm">Requirements:</h4>
-            <p className="text-sm text-muted-foreground">{job.requirements}</p>
-          </div>
-        )}
+      </div>
+    </div>
+  </CardHeader>
 
-        <div className="flex justify-between items-center pt-4 border-t">
-          <div className="text-lg font-semibold text-primary">
-            {job.salary_range || 'Salary not specified'}
-          </div>
-          <Button 
-            onClick={() => onApply(job.id)}
-            disabled={hasApplied}
-            variant={hasApplied ? "secondary" : "default"}
-          >
-            {hasApplied ? "Applied" : userHasCV ? "Apply Now" : "Upload CV to Apply"}
-          </Button>
+  <CardContent className="space-y-4">
+    <CardDescription className="line-clamp-3">{job.description}</CardDescription>
+
+    {job.requirements && (
+      <div className="space-y-2">
+        <h4 className="font-semibold text-sm">Requirements:</h4>
+        <p className="text-sm text-muted-foreground">{job.requirements}</p>
+      </div>
+    )}
+
+    <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-4 pt-4 border-t">
+      <div className="text-lg font-semibold text-primary col-span-1">
+        {job.salary_range || 'Salary not specified'}
+      </div>
+
+      {coursejob && (
+        <div className="col-span-1 flex justify-start md:justify-center">
+          <VideoDialog course={coursejob} />
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      <div className="col-span-1 flex justify-end">
+        <Button
+          onClick={() => onApply(job.id)}
+          disabled={hasApplied}
+          variant={hasApplied ? "secondary" : "default"}
+        >
+          {hasApplied ? "Applied" : userHasCV ? "Apply Now" : "Upload CV to Apply"}
+        </Button>
+      </div>
+    </div>
+  </CardContent>
+</Card>
+
   );
 };
+
+// const JobCard = ({ job }: JobCardProps) => {
+//   const [course, setCourse] = useState<Course | null>(null);
+
+//   useEffect(() => {
+//     const fetchCourse = async () => {
+//       try {
+//         const response = await fetch(`${API_BASE_URL}/courses/${job.course}/`);
+//         if (!response.ok) {
+//           throw new Error("Failed to fetch course");
+//         }
+//         const data = await response.json();
+//         setCourse(data);
+//       } catch (error) {
+//         console.error("Error fetching course:", error);
+//         toast({
+//           title: "Error loading course",
+//           description: "Could not load course for this job.",
+//           variant: "destructive",
+//         });
+//       }
+//     };
+
+//     if (job.course) {
+//       fetchCourse();
+//     }
+//   }, [job.course]);
+
+//   return (
+//     <div className="border p-4 rounded-lg shadow-sm">
+//       <h2 className="text-lg font-semibold">{job.title}</h2>
+//       <p className="text-sm text-gray-600">{job.description}</p>
+//       <p className="text-xs text-gray-400 mt-1">
+//         Posted on {new Date(job.created_at).toLocaleDateString()}
+//       </p>
+
+//       {course && (
+//         <div className="mt-4">
+//           <VideoDialog course={course} />
+//         </div>
+//       )}
+//     </div>
+//   );
+// };
+
 
 export default JobsPage;
