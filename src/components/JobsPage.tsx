@@ -39,6 +39,7 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
   const [activeTab, setActiveTab] = useState<"browse" | "applied" | "post-job">("browse");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
+  const [jobposts, setJobposts]= useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPostJobOpen, setIsPostJobOpen] = useState(false);
   const [showCVUpload, setShowCVUpload] = useState(false);
@@ -101,6 +102,8 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
 
       setJobs(activeJobs || []);
       console.log("JOBS ARE SET");
+      console.log(jobposts)
+
     } catch (error) {
       console.log("Below is Error from fetching jobs:");
       console.error("Error fetching jobs:", error);
@@ -112,7 +115,10 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
     }
   };
 
-
+  const fetchpostedJobs = async () => {
+    const userJobs = jobs.filter((job) => job.posted_by == user.id);
+    setJobposts(userJobs);
+  }
   const fetchApplications = async () => {
     try {
       const { data, error } = await supabase
@@ -129,6 +135,8 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
 
       if (error) throw error;
       setApplications(data || []);
+
+
     } catch (error) {
       console.error('Error fetching applications:', error);
     }
@@ -137,7 +145,7 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchJobs(), fetchApplications()]);
+      await Promise.all([fetchJobs(), fetchApplications(), fetchpostedJobs()]);
       setLoading(false);
     };
     loadData();
@@ -202,6 +210,7 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
     description: formData.get("description"),
     requirements: formData.get("requirements"),
     course: formData.get("course-id"),  // Include the validated courseId if present
+    posted_by: user.id
   };
 
   try {
@@ -336,9 +345,9 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
         </Button>
         <Button
           variant={activeTab === "applied" ? "default" : "ghost"}
-          onClick={() => setActiveTab("applied")}
+          onClick={() => setActiveTab(user.role === "employer" ? "postedjob":"applied")}
         >
-          Applied Jobs ({applications.length})
+          {user.role === "employer" ? "Posted Jobs" : "Applied Jobs"}
         </Button>
         {user.role === "employer" && (
           <Button
@@ -439,6 +448,43 @@ const JobsPage = ({ user, onBack }: JobsPageProps) => {
           </div>
         </div>
       )}
+      {activeTab === "postedjob" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>My Posted Jobs</CardTitle>
+              <CardDescription>Manage the jobs you’ve posted</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {jobposts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  You haven’t posted any jobs yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {jobposts.map((job) => (
+                    <div key={job.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-semibold">{job.title}</h3>
+                          <p className="text-sm text-muted-foreground">{job.company_name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Posted on {new Date(job.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Badge variant={job.is_active ? 'default' : 'secondary'}>
+                          {job.is_active ? 'Active' : 'Closed'}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
 
       {activeTab === "applied" && (
         <div className="space-y-6">
